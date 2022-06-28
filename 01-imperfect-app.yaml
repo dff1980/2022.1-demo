@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: List
+items:
+  - apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: imperfect-app
+      labels:
+        name: imperfect-app
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: imperfect-app-app
+      namespace: imperfect-app
+      labels:
+        name: imperfect-app-app
+        app: imperfect-app
+    spec:
+      replicas: 60
+      selector:
+        matchLabels:
+          app: imperfect-app
+      template:
+        metadata:
+          labels:
+            app: imperfect-app
+        spec:
+          containers:
+          - name: imperfect-app-app
+            env:
+              - name: RKE_NODE_ADDR
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.hostIP
+              - name: RKE_INSTANCE_ADDR
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: RKE_NODE_NAME
+                valueFrom:
+                  fieldRef:
+                    fieldPath: spec.nodeName
+              - name: RKE_INSTANCE_NAME
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.name
+            image: pzhukov/01-imperfect-app:latest
+            imagePullPolicy: IfNotPresent
+            ports:
+            - containerPort: 8080
+              protocol: TCP
+            livenessProbe:
+              failureThreshold: 3
+              httpGet:
+                path: /healthz
+                port: 8080
+                scheme: HTTP
+              initialDelaySeconds: 20
+              periodSeconds: 15
+              successThreshold: 1
+              timeoutSeconds: 1
+            readinessProbe:
+              failureThreshold: 3
+              httpGet:
+                path: /healthz
+                port: 8080
+                scheme: HTTP
+              initialDelaySeconds: 5
+              periodSeconds: 15
+              successThreshold: 1
+              timeoutSeconds: 1
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: imperfect-app-service
+      namespace: imperfect-app
+    spec:
+      selector:
+        app: imperfect-app
+      ports:
+      - name: app
+        port: 80
+        protocol: TCP
+        targetPort: 8080
+  - apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: imperfect-app-ingress
+      namespace: imperfect-app
+      annotations:
+        ingress.kubernetes.io/rewrite-target: /
+    spec:
+      rules:
+      - host: test-01.rancher.stend.test
+        http:
+          paths:
+            - backend:
+                service:
+                 name: imperfect-app-service
+                 port:
+                   number: 80
+              pathType: ImplementationSpecific
